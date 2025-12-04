@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
@@ -8,17 +7,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const chroma = new ChromaClient({ path: "memory" });
+const collection = await chroma.getOrCreateCollection({ name: "chamokdata" });
+
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: "https://openrouter.ai/api/v1",
 });
 
-const chroma = new ChromaClient();
-const collection = await chroma.getOrCreateCollection({ name: "chamokdata" });
-
 function detectLanguage(text) {
-  const bangla = /[\u0980-\u09FF]/;
-  return bangla.test(text) ? "bangla" : "english";
+  return /[\\u0980-\\u09FF]/.test(text) ? "bangla" : "english";
 }
 
 app.post("/chat", async (req, res) => {
@@ -35,21 +33,23 @@ app.post("/chat", async (req, res) => {
     nResults: 5,
   });
 
-  const context = results.documents.join("\n");
+  const context = results.documents.join("\\n");
 
-  const systemPrompt = lang === "bangla"
-    ? "Respond in Bangla language. Use ONLY the provided context."
-    : "Respond in English. Use ONLY the provided context.";
+  const systemPrompt =
+    lang === "bangla"
+      ? "Answer in Bangla using ONLY the context."
+      : "Answer in English using ONLY the context.";
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: `Question: ${question}\n\nContext:\n${context}` }
-    ]
+      { role: "user", content: `Question: ${question}\n\nContext:\n${context}` },
+    ],
   });
 
   res.json({ answer: completion.choices[0].message.content });
 });
 
-app.listen(3000, () => console.log("AI Chatbot running on port 3000"));
+app.listen(3000, () => console.log("AI server running"));
+
